@@ -1,0 +1,29 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RequestTableItemsOnly",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Scan"
+      ],
+      "Resource": "arn:aws:dynamodb:ap-southeast-1:<ACCOUNT_ID>:table/umak-elec3-bcsad-g07-requests"
+    },
+    {
+      "Sid": "OwnFunctionLogsOnly",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/aws/lambda/umak-elec3-bcsad-g07-quotation-handler",
+        "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/aws/lambda/umak-elec3-bcsad-g07-quotation-handler:*"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+<!--
+  Script Name: index.html
+  Type: Static web page (contractor request form and quotation lookup)
+  Location: S3 bucket umak-elec3-bcsad-g07-linktree > index.html
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hardware Store Quotation Requests</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.4rem; } h2 { font-size: 1.1rem; margin-top: 2rem; }
+  label { display: block; margin: .6rem 0 .2rem; font-weight: 600; }
+  input { padding: .45rem; border: 1px solid #bbb; border-radius: 6px; font-size: 1rem; }
+  input.full { width: 100%; box-sizing: border-box; }
+  .row { display: flex; gap: .4rem; margin-bottom: .4rem; }
+  .row input:nth-child(1) { flex: 3; } .row input:nth-child(2) { flex: 1; } .row input:nth-child(3) { flex: 1; }
+  button { padding: .5rem 1rem; border: 0; border-radius: 6px; background: #1d4ed8; color: #fff; font-size: 1rem; cursor: pointer; }
+  button.alt { background: #555; }
+  .box { background: #f3f4f6; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+  .id { font-size: 1.4rem; font-weight: 700; letter-spacing: .08em; }
+  table { border-collapse: collapse; width: 100%; } td, th { border-bottom: 1px solid #ddd; padding: .35rem; text-align: left; }
+  .err { color: #b91c1c; }
+</style>
+</head>
+<body>
+<h1>Hardware Store Quotation Requests</h1>
+
+<h2>1. Request a quotation</h2>
+<label for="name">Contractor / company name</label>
+<input id="name" class="full" maxlength="80">
+<label for="contact">Phone or email</label>
+<input id="contact" class="full" maxlength="120">
+<label>Items (cement, steel bars, lumber, ...)</label>
+<div id="rows"></div>
+<button type="button" class="alt" id="addRow">+ Add item</button>
+<p><button type="button" id="submitBtn">Send request</button></p>
+<div id="submitOut"></div>
+
+<h2>2. Check your quotation</h2>
+<label for="lookupId">Request number</label>
+<input id="lookupId" class="full" maxlength="16">
+<p><button type="button" id="lookupBtn">Check</button></p>
+<div id="lookupOut"></div>
+
+<script>
+  const API = "https://jah4560zbi.execute-api.ap-southeast-1.amazonaws.com";
+
+  const rows = document.getElementById("rows");
+  function addRow() {
+    const d = document.createElement("div");
+    d.className = "row";
+    d.innerHTML = '<input placeholder="Item" maxlength="80"><input type="number" min="1" placeholder="Qty"><input placeholder="Unit (bag, pc, m)" maxlength="20">';
+    rows.appendChild(d);
+  }
+  addRow();
+  document.getElementById("addRow").onclick = addRow;
+
+  function show(el, nodes) { el.replaceChildren(...nodes); }
+  function p(text, cls) { const e = document.createElement("p"); e.textContent = text; if (cls) e.className = cls; return e; }
+
+  document.getElementById("submitBtn").onclick = async () => {
+    const out = document.getElementById("submitOut");
+    const items = [...rows.children].map(r => {
+      const [n, q, u] = r.querySelectorAll("input");
+      return { name: n.value.trim(), qty: Number(q.value), unit: u.value.trim() };
+    }).filter(i => i.name || i.qty || i.unit);
+    try {
+      const res = await fetch(API + "/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contractorName: document.getElementById("name").value.trim(),
+          contact: document.getElementById("contact").value.trim(),
+          items
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) return show(out, [p("Please fill in every field and item.", "err")]);
+      const box = document.createElement("div");
+      box.className = "box";
+      const idEl = document.createElement("div");
+      idEl.className = "id";
+      idEl.textContent = data.requestId;
+      box.append(p("Request sent. Save this request number:"), idEl,
+                 p("Use it below to read your quotation. Keep it private."));
+      show(out, [box]);
+      document.getElementById("lookupId").value = data.requestId;
+    } catch (e) { show(out, [p("Could not reach the server.", "err")]); }
+  };
+
+  document.getElementById("lookupBtn").onclick = async () => {
+    const out = document.getElementById("lookupOut");
+    const id = document.getElementById("lookupId").value.trim();
+    if (!id) return show(out, [p("Enter your request number.", "err")]);
+    try {
+      const res = await fetch(API + "/requests/" + encodeURIComponent(id));
+      if (res.status === 404) return show(out, [p("Request not found.", "err")]);
+      const data = await res.json();
+      const box = document.createElement("div");
+      box.className = "box";
+      box.append(p("Status: " + data.status));
+      if (data.status === "QUOTED") {
+        const t = document.createElement("table");
+        t.innerHTML = "<tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr>";
+        data.quotation.lines.forEach(l => {
+          const tr = document.createElement("tr");
+          [l.name, l.qty + " " + l.unit, l.unitPrice.toFixed(2), l.lineTotal.toFixed(2)].forEach(v => {
+            const td = document.createElement("td"); td.textContent = v; tr.appendChild(td);
+          });
+          t.appendChild(tr);
+        });
+        box.append(t, p("Total: PHP " + data.quotation.total.toFixed(2)));
+      } else {
+        box.append(p("Your quotation is not ready yet. Check again later."));
+      }
+      show(out, [box]);
+    } catch (e) { show(out, [p("Could not reach the server.", "err")]); }
+  };
+</script>
+</body>
+</html>
